@@ -78,8 +78,8 @@ impl Compression {
     #[must_use]
     pub fn parse(input: &str) -> Self {
         match input {
-            "" | "none" => Self::None,
-            "bzip2" => Self::Bzip2,
+            "" | "bzip2" => Self::Bzip2,
+            "none" => Self::None,
             "gzip" => Self::Gzip,
             "xz" => Self::Xz,
             "zstd" => Self::Zstd,
@@ -266,9 +266,15 @@ impl NarInfoBuilder {
             return Err(BuildError::ZeroNarSize);
         }
         validate_line_value("StoreDir", self.store_dir.as_str())?;
-        validate_line_value("URL", &self.url)?;
+        validate_canonical_value("URL", &self.url)?;
+        if self.url.is_empty() {
+            return Err(BuildError::InvalidField {
+                field: "URL".to_owned(),
+                message: "must not be empty".to_owned(),
+            });
+        }
         if let Compression::Other(name) = &self.compression {
-            validate_line_value("Compression", name)?;
+            validate_canonical_value("Compression", name)?;
             if matches!(
                 name.as_str(),
                 "" | "none" | "bzip2" | "gzip" | "xz" | "zstd"
@@ -280,7 +286,7 @@ impl NarInfoBuilder {
             }
         }
         for signature in &self.signatures {
-            validate_line_value("Sig key name", &signature.key_name)?;
+            validate_canonical_value("Sig key name", &signature.key_name)?;
             validate_line_value("Sig encoding", &signature.encoded)?;
             if signature.key_name.contains(':') {
                 return Err(BuildError::InvalidField {
@@ -291,7 +297,7 @@ impl NarInfoBuilder {
         }
         for extension in &self.extensions {
             validate_line_value("extension name", &extension.name)?;
-            validate_line_value("extension value", &extension.value)?;
+            validate_canonical_value("extension value", &extension.value)?;
             if extension.name.is_empty() || extension.name.contains(':') {
                 return Err(BuildError::InvalidField {
                     field: "extension name".to_owned(),
@@ -429,7 +435,7 @@ impl NarInfo {
         }
 
         let store_path_field = required(&fields, "StorePath")?;
-        let url = required(&fields, "URL")?.value.to_owned();
+        let url_field = required(&fields, "URL")?;
         let nar_hash_field = required(&fields, "NarHash")?;
         let nar_size_field = required(&fields, "NarSize")?;
         let compression_field = optional(&fields, "Compression")?;
@@ -438,6 +444,14 @@ impl NarInfo {
         let content_address_field = optional(&fields, "CA")?;
         let file_hash_field = optional(&fields, "FileHash")?;
         let file_size_field = optional(&fields, "FileSize")?;
+
+        if url_field.value.is_empty() {
+            return Err(ParseError::InvalidField {
+                field: "URL",
+                message: format!("at line {}: must not be empty", url_field.line),
+            });
+        }
+        let url = url_field.value.to_owned();
 
         let signatures = fields
             .iter()
@@ -810,6 +824,18 @@ fn validate_line_value(field: &str, value: &str) -> Result<(), BuildError> {
         Err(BuildError::InvalidField {
             field: field.to_owned(),
             message: "must not contain a line break".to_owned(),
+        })
+    } else {
+        Ok(())
+    }
+}
+
+fn validate_canonical_value(field: &str, value: &str) -> Result<(), BuildError> {
+    validate_line_value(field, value)?;
+    if value.chars().next().is_some_and(char::is_whitespace) {
+        Err(BuildError::InvalidField {
+            field: field.to_owned(),
+            message: "must not begin with whitespace".to_owned(),
         })
     } else {
         Ok(())

@@ -45,7 +45,7 @@ fn minimal_valid_narinfo_and_default_bzip2() {
 #[test]
 fn parses_every_compression_form() {
     let cases = [
-        ("", Compression::None),
+        ("", Compression::Bzip2),
         ("none", Compression::None),
         ("bzip2", Compression::Bzip2),
         ("gzip", Compression::Gzip),
@@ -147,6 +147,12 @@ fn rejects_missing_and_duplicate_singletons() {
             ParseError::MissingField { field }
         );
     }
+
+    let empty_url = minimal().replace("URL: nar/fixture.nar", "URL: ");
+    assert!(matches!(
+        NarInfo::parse_in(&StoreDir::default(), empty_url.as_bytes()),
+        Err(ParseError::InvalidField { field: "URL", .. })
+    ));
 
     for field in [
         "StorePath",
@@ -483,6 +489,12 @@ fn builder_rejects_noncanonical_values() {
             .unwrap_err(),
         BuildError::ZeroNarSize
     );
+    for url in ["", " leading", "\tleading"] {
+        assert!(matches!(
+            NarInfo::builder(path.clone(), url, NixHash::Sha256([1; 32]), 1).build(),
+            Err(BuildError::InvalidField { field, .. }) if field == "URL"
+        ));
+    }
     assert!(matches!(
         base()
             .extension(Field {
@@ -509,12 +521,36 @@ fn builder_rejects_noncanonical_values() {
     ));
     assert!(matches!(
         base()
+            .compression(Compression::Other("\u{a0}future".to_owned()))
+            .build(),
+        Err(BuildError::InvalidField { field, .. }) if field == "Compression"
+    ));
+    assert!(matches!(
+        base()
+            .signature(NarInfoSignature {
+                key_name: " cache".to_owned(),
+                encoded: "AAAA".to_owned(),
+            })
+            .build(),
+        Err(BuildError::InvalidField { field, .. }) if field == "Sig key name"
+    ));
+    assert!(matches!(
+        base()
             .extension(Field {
                 name: "X-Test".to_owned(),
                 value: "first\nsecond".to_owned(),
             })
             .build(),
         Err(BuildError::InvalidField { .. })
+    ));
+    assert!(matches!(
+        base()
+            .extension(Field {
+                name: "X-Test".to_owned(),
+                value: " leading".to_owned(),
+            })
+            .build(),
+        Err(BuildError::InvalidField { field, .. }) if field == "extension value"
     ));
 }
 
@@ -544,7 +580,7 @@ fn canonical_write_is_golden_and_round_trips() {
     let expected = format!(
         "StorePath: {PATH}\n\
          URL: nar/example\n\
-         Compression: none\n\
+         Compression: bzip2\n\
          FileHash: {}\n\
          FileSize: 7\n\
          NarHash: {}\n\

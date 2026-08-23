@@ -7,6 +7,12 @@ The format is based on [Keep a Changelog], and this project follows
 
 ## [Unreleased]
 
+### Fixed
+
+- Treat an empty `Compression` field as Nix's default `bzip2` compression.
+- Reject empty URLs during parsing and construction.
+- Reject builder values whose leading whitespace would be lost when reparsed.
+
 ## [0.1.0] - 2026-08-23
 
 ### Added
