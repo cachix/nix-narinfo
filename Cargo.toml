@@ -1,6 +1,6 @@
 [package]
 name = "nix-narinfo"
-version = "0.1.1"
+version = "0.2.0"
 edition = "2021"
 description = "Pure Rust Nix binary-cache narinfo parsing and validation"
 license = "Apache-2.0"
@@ -13,7 +13,7 @@ categories = ["parser-implementations", "data-structures", "cryptography"]
 [dependencies]
 base64 = "0.22"
 ed25519-dalek = "2"
-nix-derivation = { version = "0.3.0", git = "https://github.com/cachix/nix-derivation.git", rev = "9dae418f6bec6a1c8e9d598fbb6ab0f65d6e4ad6" }
+nix-derivation = "0.4.0"
 thiserror = "2"
 
 [[bench]]

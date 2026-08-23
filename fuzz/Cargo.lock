@@ -227,8 +227,9 @@ checksum = "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98"
 
 [[package]]
 name = "nix-derivation"
-version = "0.3.0"
-source = "git+https://github.com/cachix/nix-derivation.git?rev=9dae418f6bec6a1c8e9d598fbb6ab0f65d6e4ad6#9dae418f6bec6a1c8e9d598fbb6ab0f65d6e4ad6"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b20e9d293580f19979a1e81585573348bed9d1d139147d9299b13d27c2470b1a"
 dependencies = [
  "base64",
  "memchr",
@@ -240,7 +241,7 @@ dependencies = [
 
 [[package]]
 name = "nix-narinfo"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "base64",
  "ed25519-dalek",
