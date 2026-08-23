@@ -1,0 +1,9 @@
+StorePath: /nix/store/000ghm78048kh2prsfzkf93xm3803m0r-default.md
+URL: nar/13gkmly6x95ggyahacza9668y9a452ssrsx0xxwc7ray07y1470x.nar.xz
+Compression: xz
+FileHash: sha256:13gkmly6x95ggyahacza9668y9a452ssrsx0xxwc7ray07y1470x
+FileSize: 1384
+NarHash: sha256:1azjplcwpkvfh0ik0p5arljd2sjaka2k3kq59chhcb2b5h5ibz74
+NarSize: 3096
+References: 
+CA: fixed:r:sha256:1azjplcwpkvfh0ik0p5arljd2sjaka2k3kq59chhcb2b5h5ibz74

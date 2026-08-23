@@ -1,0 +1,20 @@
+[package]
+name = "nix-narinfo-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+nix-derivation = { version = "0.3.0", git = "https://github.com/cachix/nix-derivation.git", rev = "9dae418f6bec6a1c8e9d598fbb6ab0f65d6e4ad6" }
+nix-narinfo = { path = ".." }
+
+[[bin]]
+name = "parse"
+path = "fuzz_targets/parse.rs"
+test = false
+doc = false
+bench = false
