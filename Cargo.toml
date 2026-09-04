@@ -1,6 +1,6 @@
 [package]
 name = "nix-narinfo"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 description = "Pure Rust Nix binary-cache metadata parsing and validation"
 license = "Apache-2.0"
