@@ -7,6 +7,21 @@ The format is based on [Keep a Changelog], and this project follows
 
 ## [Unreleased]
 
+### Added
+
+- Nix `build-trace-v2` cache-key construction using `DrvOutput` identities
+  supplied by `nix-derivation`.
+- Parsing and canonical writing for unkeyed `.doi` documents and full keyed
+  realisations, accepting Nix 2.35 string signatures and Nix 2.36 signature
+  objects.
+- Exact Nix realisation fingerprint construction and Ed25519 signature
+  verification.
+
+### Changed
+
+- Generalize `NarInfoSignature` as `NixSignature`, retaining the old name as a
+  source-compatible alias.
+
 ## [0.2.0] - 2026-08-23
 
 ### Changed

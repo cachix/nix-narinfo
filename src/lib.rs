@@ -1,4 +1,5 @@
-//! Pure Rust parsing, canonical writing, and validation for Nix `.narinfo` files.
+//! Pure Rust parsing, canonical writing, and validation for Nix binary-cache
+//! metadata: `.narinfo` records and derivation-output realisations (`.doi`).
 //!
 //! This crate deliberately contains no transport, decompression, store mutation,
 //! or trust-policy code. Callers fetch the record, choose supported compression,
@@ -24,6 +25,13 @@
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
+
+mod realisation;
+
+pub use realisation::{
+    realisation_cache_path, Realisation, RealisationParseError, UnkeyedRealisation,
+    MAX_REALISATION_SIZE, REALISATIONS_PREFIX,
+};
 
 use std::collections::BTreeSet;
 use std::fmt;
@@ -107,14 +115,20 @@ impl fmt::Display for Compression {
     }
 }
 
-/// A named Ed25519 signature attached to a `.narinfo` record.
+/// A named, base64-encoded Nix Ed25519 signature.
+///
+/// Nix uses the same `NAME:BASE64` representation in `.narinfo` records and
+/// derivation-output realisations.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct NarInfoSignature {
+pub struct NixSignature {
     /// Name used to select a configured public key.
     pub key_name: String,
     /// Base64-encoded Ed25519 signature bytes.
     pub encoded: String,
 }
+
+/// Backwards-compatible name for a Nix signature attached to a `.narinfo`.
+pub type NarInfoSignature = NixSignature;
 
 /// An unrecognized `.narinfo` field retained for forward compatibility.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -359,7 +373,71 @@ impl FromStr for TrustedPublicKey {
     }
 }
 
-impl NarInfoSignature {
+impl NixSignature {
+    /// Parse Nix's `NAME:BASE64` signature representation.
+    ///
+    /// The decoded data must be nonempty, as in Nix. Its Ed25519 length is
+    /// checked separately by [`Self::verify`]. The returned base64 spelling is
+    /// canonicalized.
+    pub fn parse(input: &str) -> Result<Self, SignatureError> {
+        let (key_name, encoded) = input
+            .split_once(':')
+            .ok_or(SignatureError::MissingSeparator)?;
+        if key_name.is_empty() {
+            return Err(SignatureError::EmptyKeyName);
+        }
+        let bytes = base64::engine::general_purpose::STANDARD
+            .decode(encoded)
+            .map_err(|_| SignatureError::InvalidBase64)?;
+        if bytes.is_empty() {
+            return Err(SignatureError::EmptySignature);
+        }
+        Ok(Self {
+            key_name: key_name.to_owned(),
+            encoded: base64::engine::general_purpose::STANDARD.encode(bytes),
+        })
+    }
+
+    /// Construct a signature from its key name and decoded bytes.
+    pub fn from_bytes(key_name: impl Into<String>, bytes: &[u8]) -> Result<Self, SignatureError> {
+        let key_name = key_name.into();
+        if key_name.is_empty() {
+            return Err(SignatureError::EmptyKeyName);
+        }
+        if key_name.contains(':') {
+            return Err(SignatureError::InvalidKeyName);
+        }
+        if bytes.is_empty() {
+            return Err(SignatureError::EmptySignature);
+        }
+        Ok(Self {
+            key_name,
+            encoded: base64::engine::general_purpose::STANDARD.encode(bytes),
+        })
+    }
+
+    /// Return the stored signature as `NAME:BASE64`.
+    ///
+    /// Values returned by [`Self::parse`] and [`Self::from_bytes`] use
+    /// canonical base64.
+    pub fn to_nix_string(&self) -> String {
+        format!("{}:{}", self.key_name, self.encoded)
+    }
+
+    /// Validate this value and return it with canonical base64 encoding.
+    pub fn canonicalized(&self) -> Result<Self, SignatureError> {
+        if self.key_name.is_empty() {
+            return Err(SignatureError::EmptyKeyName);
+        }
+        if self.key_name.contains(':') {
+            return Err(SignatureError::InvalidKeyName);
+        }
+        let bytes = base64::engine::general_purpose::STANDARD
+            .decode(&self.encoded)
+            .map_err(|_| SignatureError::InvalidBase64)?;
+        Self::from_bytes(self.key_name.clone(), &bytes)
+    }
+
     /// Verify this signature against the matching configured keys.
     ///
     /// `Ok(false)` means that no configured key has this signature's name, or
@@ -383,6 +461,40 @@ impl NarInfoSignature {
             .iter()
             .filter(|key| key.name == self.key_name)
             .any(|key| key.key.verify_strict(fingerprint, &signature).is_ok()))
+    }
+}
+
+impl fmt::Display for NixSignature {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(&self.to_nix_string())
+    }
+}
+
+impl FromStr for NixSignature {
+    type Err = SignatureError;
+
+    fn from_str(input: &str) -> Result<Self, Self::Err> {
+        Self::parse(input)
+    }
+}
+
+impl PartialOrd for NixSignature {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for NixSignature {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.key_name.cmp(&other.key_name).then_with(|| {
+            let engine = base64::engine::general_purpose::STANDARD;
+            match (engine.decode(&self.encoded), engine.decode(&other.encoded)) {
+                (Ok(left), Ok(right)) => left
+                    .cmp(&right)
+                    .then_with(|| self.encoded.cmp(&other.encoded)),
+                _ => self.encoded.cmp(&other.encoded),
+            }
+        })
     }
 }
 
@@ -926,16 +1038,25 @@ pub enum KeyError {
     InvalidKey,
 }
 
-/// Failure to decode a narinfo signature.
+/// Failure to decode or verify a Nix signature.
 #[derive(Debug, Error, Eq, PartialEq)]
 #[non_exhaustive]
 pub enum SignatureError {
+    /// The signature did not contain the `NAME:BASE64` separator.
+    #[error("signature has no name separator")]
+    MissingSeparator,
     /// The signature did not name a key.
     #[error("signature has an empty key name")]
     EmptyKeyName,
     /// Signature bytes were not valid base64.
     #[error("signature is not valid base64")]
     InvalidBase64,
+    /// The decoded signature was empty.
+    #[error("signature is empty")]
+    EmptySignature,
+    /// The key name could not be represented before a colon separator.
+    #[error("signature key name contains ':'")]
+    InvalidKeyName,
     /// The decoded signature was not 64 bytes.
     #[error("signature is {got} bytes, expected 64")]
     InvalidLength {
