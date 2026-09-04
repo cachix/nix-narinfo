@@ -1,6 +1,6 @@
 [package]
 name = "nix-narinfo"
-version = "0.3.0"
+version = "0.4.0"
 edition = "2021"
 description = "Pure Rust Nix binary-cache metadata parsing and validation"
 license = "Apache-2.0"
@@ -13,7 +13,7 @@ categories = ["parser-implementations", "data-structures", "cryptography"]
 [dependencies]
 base64 = "0.22"
 ed25519-dalek = "2"
-nix-derivation = "0.5.0"
+nix-derivation = "0.6.1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
